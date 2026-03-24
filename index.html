@@ -3,29 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>員工簽到系統</title>
+  <title>清潔團隊簽到系統</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .container { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 85%; max-width: 400px; text-align: center; }
-    .status-box { margin: 20px 0; padding: 15px; border-radius: 10px; background: #e9ecef; font-size: 14px; color: #495057; }
-    #userId { color: #00b900; font-weight: bold; word-break: break-all; margin-top: 10px; }
-    .btn { background: #00b900; color: white; border: none; padding: 15px 0; width: 100%; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; display: none; transition: 0.3s; }
-    .btn:active { background: #008f00; transform: scale(0.98); }
+    body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 85%; max-width: 400px; text-align: center; }
+    .status-box { margin: 20px 0; padding: 15px; border-radius: 10px; background: #f8f9fa; border: 1px solid #eee; font-size: 14px; color: #666; }
+    #userName { color: #00b900; font-weight: bold; font-size: 20px; margin-bottom: 5px; }
+    #userId { color: #999; font-size: 12px; word-break: break-all; margin-bottom: 20px; }
+    .btn { background: #00b900; color: white; border: none; padding: 15px 0; width: 100%; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; display: none; box-shadow: 0 4px 12px rgba(0,185,0,0.3); }
+    .btn:active { transform: scale(0.98); background: #009e00; }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <h2>🧹 清潔員簽到</h2>
-  <div class="status-box" id="status">正在啟動 LINE 驗證...</div>
-  <div id="userId"></div>
-  
-  <button id="sendBtn" class="btn" onclick="submitToSheet()">確認簽到</button>
+<div class="card">
+  <div id="userName">載入中...</div>
+  <div id="userId">正在驗證身分</div>
+  <div class="status-box" id="status">LINE 初始化中...</div>
+  <button id="sendBtn" class="btn" onclick="submitToSheet()">確認簽到進場</button>
 </div>
 
 <script>
-  // ⚠️ 重要：請把你的 GAS 網址貼在下方引號內
+  // ⚠️ 請在此處填入你的 GAS 網址 (部署後的 /exec 網址)
   const GAS_WEB_APP_URL = "在此貼上你的GAS網頁應用程式網址";
 
   let userProfile = null;
@@ -33,23 +33,27 @@
   async function main() {
     const status = document.getElementById('status');
     try {
-      // 1. 初始化 LIFF
+      // 1. 初始化 LIFF (使用你的 LIFF ID)
       await liff.init({ liffId: "2009587017-nnCisgdy" });
       
-      // 2. 判斷登入狀態
       if (!liff.isLoggedIn()) {
-        status.innerText = "正在導向登入畫面...";
         liff.login();
       } else {
-        // 3. 取得個人資料
+        // 2. 取得個人資料
         userProfile = await liff.getProfile();
-        status.innerText = "驗證成功！請點擊下方按鈕完成簽到。";
-        document.getElementById('userId').innerText = "您的 ID: " + userProfile.userId;
+        
+        // 🚀 跳出 Alert 直接讓你看到資料 (測試用)
+        alert("驗證成功！\n姓名：" + userProfile.displayName + "\nID：" + userProfile.userId);
+
+        // 3. 更新介面
+        document.getElementById('userName').innerText = "你好，" + userProfile.displayName;
+        document.getElementById('userId').innerText = "ID: " + userProfile.userId;
         document.getElementById('sendBtn').style.display = "block";
+        status.innerText = "身分驗證完成，請點擊按鈕簽到";
       }
     } catch (err) {
-      status.innerText = "❌ 錯誤: " + err.message;
-      console.error(err);
+      status.innerText = "錯誤: " + err.message;
+      alert("LIFF 初始化失敗，請確認在 LINE 內開啟");
     }
   }
 
@@ -57,16 +61,15 @@
     const status = document.getElementById('status');
     const btn = document.getElementById('sendBtn');
     
-    status.innerText = "🚀 正在傳送至試算表...";
+    status.innerText = "資料上傳中...";
     btn.disabled = true;
     btn.style.opacity = "0.5";
 
     try {
-      // 使用 fetch 發送資料到 GAS (POST 方式)
-      const response = await fetch(GAS_WEB_APP_URL, {
+      // 傳送 JSON 資料給 GAS
+      await fetch(GAS_WEB_APP_URL, {
         method: 'POST',
-        mode: 'no-cors', // 避開 GAS 的 CORS 限制
-        cache: 'no-cache',
+        mode: 'no-cors', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: userProfile.userId,
@@ -74,13 +77,10 @@
         })
       });
 
-      // 由於 no-cors 模式無法讀取 response，我們直接提示成功
-      alert("簽到成功！請關閉視窗。");
-      status.innerText = "✅ 簽到已完成";
-      liff.closeWindow(); // 自動關閉 LINE 視窗
+      alert("簽到成功！祝工作順利。");
+      liff.closeWindow(); // 簽到完自動關閉 LINE 視窗
     } catch (error) {
-      alert("傳送失敗，請聯繫管理員");
-      status.innerText = "❌ 傳送失敗";
+      alert("系統繁忙，請稍後再試或聯繫管理員");
       btn.disabled = false;
       btn.style.opacity = "1";
     }
